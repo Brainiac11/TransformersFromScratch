@@ -1,0 +1,34 @@
+Large Language Models, or **LLMs**, are AI systems trained on enormous collections of text so they can understand and generate human-like language.
+
+### How they work
+
+Most modern LLMs are based on the **Transformer** architecture. At a simplified level, they:
+
+1. Break text into small units called **tokens**.
+2. Examine relationships between those tokens using **attention**.
+3. Predict the most likely next token given the context.
+4. Repeat that prediction to generate sentences, code, answers, and other content.
+
+During training, an LLM may process billions or trillions of tokens and learn statistical patterns involving language, facts, reasoning, programming, style, and many other concepts.
+
+### Typical lifecycle
+
+**Pretraining** teaches the model general language patterns from large datasets. **Post-training** then makes it more useful and safer through techniques such as supervised fine-tuning, human feedback, and reinforcement learning. Some systems can also use external tools such as web search, databases, calculators, or code execution rather than relying solely on what the model learned during training.
+
+### What LLMs are good at
+
+They can summarize and explain information, write and edit text, translate languages, generate and debug code, analyze documents, brainstorm ideas, answer questions, and interact conversationally. More advanced systems can also perform multi-step reasoning and act as agents that use software tools.
+
+### Important limitations
+
+LLMs don't operate like traditional databases. They generate responses probabilistically, so they can sometimes produce convincing but incorrect information—often called **hallucinations**. Their knowledge may also be outdated unless they have access to current information. Performance can depend heavily on the prompt, available context, training data, and model size.
+
+They can also inherit biases from their training data, struggle with very long or ambiguous tasks, and should not automatically be trusted for high-stakes decisions without verification.
+
+### A useful mental model
+
+Think of an LLM as a **very sophisticated language prediction engine that has learned a compressed representation of patterns found across a huge amount of human-written material**. It isn't simply copying text from a database, and it doesn't necessarily "know" things in exactly the way a person does.
+
+Examples of LLM families include **GPT, Claude, Gemini, Llama, and Qwen**.
+
+In short: **LLMs turn large-scale language prediction into a general-purpose interface for working with information, language, and increasingly software tools.**
