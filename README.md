@@ -1,0 +1,1 @@
+This is just a way for me to learn how transformers work and a through documentation of the lessons I learned from my experiments.
