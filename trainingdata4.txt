@@ -1,0 +1,552 @@
+	
+cells	
+0	
+cell_type	"code"
+execution_count	1
+id	"b974722f"
+metadata	{}
+outputs	[]
+source	
+0	"# This is a transformer from scratch (mostly for fun)"
+1	
+cell_type	"code"
+execution_count	2
+id	"a3d9010d"
+metadata	{}
+outputs	[]
+source	
+0	"\n"
+1	"#imports\n"
+2	"\n"
+3	"import torch\n"
+4	"import torch.nn as nn\n"
+5	"import torch.nn.functional as F\n"
+6	"import numpy as np\n"
+7	"import matplotlib.pyplot as plt\n"
+8	"\n"
+9	"import os\n"
+10	"import sys\n"
+11	"import random\n"
+12	"\n"
+13	"import typing\n"
+14	"\n"
+15	"torch.set_default_device('cuda')"
+2	
+cell_type	"code"
+execution_count	3
+id	"5f97b4c8"
+metadata	{}
+outputs	[]
+source	
+0	"# data preperation \n"
+1	"# importantly, I am chose to only look at individual characters (rather than tokens) to make the transformer far simpler to implement (no need for a tokenizer)\n"
+2	"# Moreover, by focusing on only characters, each character can just be simply assigned an integer, making the code simpler\n"
+3	'text = open("trainingdata.txt", "r").read() # should be simple plain text file\n'
+4	"\n"
+5	"chars = sorted(list(set(text)))\n"
+6	"string_to_output_ints = {character: i for i, character in enumerate(chars)}\n"
+7	"int_to_output_string = {i: character for i, character in enumerate(chars)}\n"
+8	"\n"
+9	"encode = lambda s: [string_to_output_ints[c] for c in s] # encoder that converts any string into int based on training data\n"
+10	'decode = lambda ids: "".join([int_to_output_string[i] for i in ids]) # basically the opposite of the encoder\n'
+11	"\n"
+12	"data = torch.tensor(encode(text), dtype=torch.long) # takes all the training data and coverts into into a tensor; uses a datatype of torch.long to hold a signed 64 bit integer (int64)\n"
+3	
+cell_type	"code"
+execution_count	4
+id	"afbdaa42"
+metadata	{}
+outputs	[]
+source	
+0	"# Mock up of the actual problem\n"
+1	'# since the problem itself is "next token prediction" with each token being an individual character\n'
+2	"# each of the inputs must be an array of chars, while the output is a char\n"
+3	"# essentially if x = [list of chars] = the input, then y = [list of chars + new_char] = the output\n"
+4	"# a good mathematical representation for this can be P(x_(t+1) | x_1, ... , x_t)"
+4	
+cell_type	"code"
+execution_count	null
+id	"61274307"
+metadata	{}
+outputs	
+0	
+name	"stdout"
+output_type	"stream"
+text	
+0	"cuda\n"
+source	
+0	"# token embedding works by creating a mathematical space (a vector space) with n_dimensions\n"
+1	"# this vector space then houses all the information of each of the chars (tokens)\n"
+2	"# This therefore converts the dictionary, which is a simplification done on the code, into a \n"
+3	"# sound vector space that the model can train on\n"
+4	"vocab_size = len(chars) # number of unique chars that are present in the text\n"
+5	"d_model = 384 # the number of dimensions each vector can have to represent each char\n"
+6	"batch_size = 64\n"
+7	"max_iters = 5000\n"
+8	"eval_interval = 200\n"
+9	"learning_rate = 5e-4\n"
+10	"eval_iters = 20\n"
+11	"num_heads = 6\n"
+12	"num_layers = 6\n"
+13	"dropout = 0.1\n"
+14	"temperature = 0.05\n"
+15	"BLOCK_SIZE: int = 256 # max sequence/context length\n"
+16	'device: str = "cuda" if torch.cuda.is_available() else "cpu"\n'
+17	"print(device)\n"
+18	"token_embeddings = nn.Embedding(vocab_size, d_model) # creates the actual embedding space\n"
+19	"\n"
+20	"\n"
+21	"# Input:\n"
+22	"# B = 4 sequences\n"
+23	"# T = 10 tokens per sequence\n"
+24	"x = torch.randint(0, vocab_size, (4, 10))"
+5	
+cell_type	"code"
+execution_count	6
+id	"cc78bd6f"
+metadata	{}
+outputs	
+0	
+name	"stdout"
+output_type	"stream"
+text	
+0	"tensor([[[ 2.2374,  2.1590,  0.4477,  ...,  0.4040, -2.2631, -0.5908],\n"
+1	"         [ 0.3755,  0.2324,  2.2213,  ...,  0.3795,  1.6460, -0.8578],\n"
+2	"         [-0.6585,  0.4928, -1.3155,  ..., -0.0537,  0.6382, -0.6142],\n"
+3	"         ...,\n"
+4	"         [ 1.2615,  3.2043,  0.2778,  ..., -0.4247, -2.0836, -3.5155],\n"
+5	"         [ 0.4558,  1.4341, -1.9227,  ..., -0.0942, -0.5222, -0.6116],\n"
+6	"         [-0.9492,  0.6219,  1.5040,  ...,  1.5027, -1.3222,  0.3980]],\n"
+7	"\n"
+8	"        [[ 1.0882,  1.2977, -1.5998,  ...,  0.0224, -1.8298, -0.5454],\n"
+9	"         [ 0.2383,  0.6647,  1.7509,  ...,  1.6287, -0.0040, -0.4366],\n"
+10	"         [-1.4565,  0.5058, -2.0014,  ..., -0.7291,  1.4750, -1.1931],\n"
+11	"         ...,\n"
+12	"         [-1.4614, -0.1688, -0.2702,  ...,  0.0687, -0.2244, -3.2219],\n"
+13	"         [ 0.7037, -0.2430, -0.8874,  ..., -0.8512,  0.8730, -0.1369],\n"
+14	"         [ 0.0768, -0.4467,  2.0005,  ...,  1.0319,  2.6188, -0.1511]],\n"
+15	"\n"
+16	"        [[-0.7311,  1.0024,  0.3423,  ...,  0.4855, -2.8111,  0.3366],\n"
+17	"         [-0.2973,  0.5556,  2.5762,  ...,  2.1892, -0.2127, -1.6559],\n"
+18	"         [-1.3239,  1.9299,  0.6649,  ...,  0.5151,  0.9892, -1.0088],\n"
+19	"         ...,\n"
+20	"         [ 0.3130,  0.2504, -0.7220,  ...,  1.2579,  0.9677, -0.0169],\n"
+21	"         [-0.8385,  2.0270, -2.5821,  ..., -1.3592,  0.3952, -1.0385],\n"
+22	"         [ 1.5070,  1.3019, -0.3003,  ...,  1.3879,  1.9986, -1.2738]],\n"
+23	"\n"
+24	"        [[ 0.2921,  1.8159, -0.9679,  ...,  0.0409, -3.2225,  0.4522],\n"
+25	"         [ 0.1456,  0.7829,  1.0928,  ...,  0.8319, -0.9023, -1.3063],\n"
+26	"         [-2.0442,  0.1419,  0.5434,  ..., -0.6385,  3.2443, -1.6583],\n"
+27	"         ...,\n"
+28	"         [ 0.6444,  0.3441,  0.0448,  ..., -0.1529, -0.3897, -1.3591],\n"
+29	"         [ 0.8654,  2.5203, -1.8797,  ...,  0.5786,  2.4469, -2.2411],\n"
+30	"         [-0.0604, -0.0144,  1.5301,  ...,  2.2810,  0.9687,  0.2701]]],\n"
+31	"       device='cuda:0', grad_fn=<AddBackward0>)\n"
+source	
+0	"# positional embedding helps the attention mechanism understand the location at which the token is located in\n"
+1	"# This works with regular token embedding and adds positional information \n"
+2	"# (which will change the meaning of each of the tokens)\n"
+3	"positional_embedding = nn.Embedding(BLOCK_SIZE, d_model) # creates the positional embedding space\n"
+4	"\n"
+5	"tok = token_embeddings(x)\n"
+6	"\n"
+7	"# passes into the positional embedding the length of the data input and the device to compute\n"
+8	"pos = positional_embedding(\n"
+9	"    torch.arange(x.shape[1], device=x.device)\n"
+10	")\n"
+11	"\n"
+12	"h = tok + pos # this is the combined embedding that describes the text, it combines the positional embeddings and the token embeddings together\n"
+13	"\n"
+14	"print(h)\n"
+6	
+cell_type	"code"
+execution_count	7
+id	"d9dead9b"
+metadata	{}
+outputs	
+0	
+name	"stdout"
+output_type	"stream"
+text	
+0	"torch.Size([74805])\n"
+source	
+0	"# Convert the entire dataset into integer token IDs\n"
+1	"data = torch.tensor(\n"
+2	"    encode(text),\n"
+3	"    dtype=torch.long\n"
+4	")\n"
+5	"print(data.shape)\n"
+6	"\n"
+7	"\n"
+8	"# generic training and validation split.\n"
+9	"# the standard is usually 90 percent 10 percent because on either ends of the extremes\n"
+10	"# with a LARGE amount of data, or a small amount of data, you need to use as much as possible\n"
+11	"# in training to maximize performance\n"
+12	"split = int(0.9 * len(data))\n"
+13	"\n"
+14	"train_data = data[:split]\n"
+15	"val_data = data[split:]"
+7	
+cell_type	"code"
+execution_count	8
+id	"565955e5"
+metadata	{}
+outputs	[]
+source	
+0	"# batch making\n"
+1	"def get_batch(split_name):\n"
+2	'    """\n'
+3	"    Returns:\n"
+4	"\n"
+5	"        x: [B, T]\n"
+6	"        y: [B, T]\n"
+7	"\n"
+8	"    y is x shifted one character into the future. (next prediction/data)\n"
+9	'    """\n'
+10	"\n"
+11	'    source = train_data if split_name == "train" else val_data\n'
+12	"\n"
+13	"    # random starting positions for each sequence\n"
+14	"    starts = torch.randint(\n"
+15	"        0,\n"
+16	"        len(source) - BLOCK_SIZE - 1,\n"
+17	"        (batch_size,)\n"
+18	"    )\n"
+19	"\n"
+20	"    x = torch.stack([\n"
+21	"        source[i:i + BLOCK_SIZE]\n"
+22	"        for i in starts\n"
+23	"    ])\n"
+24	"\n"
+25	"    y = torch.stack([\n"
+26	"        source[i + 1:i + BLOCK_SIZE + 1]\n"
+27	"        for i in starts\n"
+28	"    ])\n"
+29	"\n"
+30	"    return x.to(device), y.to(device)"
+8	
+cell_type	"code"
+execution_count	9
+id	"1f318708"
+metadata	{}
+outputs	[]
+source	
+0	"# SINGLE ATTENTION HEAD!!!!\n"
+1	"class Head(nn.Module):\n"
+2	"    def __init__(self, d_model, head_size):\n"
+3	"        super().__init__()\n"
+4	"        self.key = nn.Linear(d_model, head_size, bias=False)\n"
+5	"        self.query = nn.Linear(d_model, head_size, bias=False)\n"
+6	"        self.value = nn.Linear(d_model, head_size, bias=False)\n"
+7	"\n"
+8	"        # Lower-triangular causal mask\n"
+9	"        #\n"
+10	"        # Example for T = 4:\n"
+11	"        #\n"
+12	"        # 1 0 0 0\n"
+13	"        # 1 1 0 0\n"
+14	"        # 1 1 1 0\n"
+15	"        # 1 1 1 1\n"
+16	"        # just a fancy matrix for a pretty simple idea\n"
+17	"\n"
+18	"        self.register_buffer(\n"
+19	'            "tril", torch.tril(torch.ones(BLOCK_SIZE, BLOCK_SIZE))\n'
+20	"        )  # this is very interesting to analyse\n"
+21	"        # the purpose of having these 'buffers' is that the model should not be able to look at the future words,\n"
+22	"        # and perform calculations based on them. By making the future tokens 0, the model will\n"
+23	"        # be unable to allow them to influence current tokens, keeping the attention mechanism\n"
+24	"        # one-way. In attention, the past cannot affect the future, until the future occurs\n"
+25	"        # then only is the future able to affect the past, and vice-versa. (stops cheating)\n"
+26	"        # softmax also resets these back down to 0 after attention makes them -inf\n"
+27	"\n"
+28	"        self.dropout = nn.Dropout(\n"
+29	"            dropout\n"
+30	"        )  # this is actually also very interesting to analyse\n"
+31	"        # essentially, the purpose of Dropout is to prevent overfitting of the data\n"
+32	"        # Each node has a probability of being deactivated during training,\n"
+33	"        # which ends up decreasing overfitting, and increasing overall model quality\n"
+34	"        # A good analogy to this is in the workplace\n"
+35	"        # If there are 10 workers who specialize in their own specific tasks, overtime,\n"
+36	"        # they are only capable of outputting the very specific things that they were\n"
+37	"        # trained to do, which means that they won't be able to challenging or unique problems\n"
+38	"        # however, if one of them is sick, and cannot work, than the others pick up\n"
+39	"        # some of the info that the missing worker carried, which makes all of them more\n"
+40	"        # free-thinking and creative, ultimately making it so that when the sick workers\n"
+41	"        # is better, and returns, the other workers are more stimulated, and less hyper-focused\n"
+42	"        # on their own specialization, making them more generalized (stopping overfitting)\n"
+43	"\n"
+44	'    """_summary_ This does the forward pass of all the input data. \n'
+45	"    Essentially, when the data gets a linear transformation\n"
+46	"    _param_ x = [B, T, C]\n"
+47	"    q,k,v = [B, T, H] where H is the head dimension\n"
+48	"    \n"
+49	'    """\n'
+50	"\n"
+51	"    def forward(self, x):\n"
+52	"        B, T, C = x.shape\n"
+53	"        \n"
+54	"        k = self.key(x)\n"
+55	"        q = self.query(x)\n"
+56	"        v = self.value(x)\n"
+57	"        \n"
+58	"        # computing attention scores\n"
+59	"        # it mostly works from using \n"
+60	"        # q: [B, T, H]\n"
+61	"        # k.transpose [B, H, T]\n"
+62	"\n"
+63	"        scores = q @ k.transpose(-2, -1)\n"
+64	"        \n"
+65	"        # this scales scores by sqrt(head_size)\n"
+66	"        # The reason for this is very obvious once mathematically explained\n"
+67	"        # Essentially, the dot product of vectors is always capped at 1, \n"
+68	"        # however, adding vectors together can increase the magnitude\n"
+69	"        # beyond what softmax can effectively control\n"
+70	"        # therefore producing unreliable extreme values that prevent the transformer from working\n"
+71	"        # The dot product variance is always 1, while the summation effect causes the dot product variation\n"
+72	"        # to become it's magnitude\n"
+73	"        # dividing sets the scores back down to 1, and therefore keeps the stddev at 1\n"
+74	"        scores = scores / (k.shape[-1] ** 0.5)\n"
+75	"        \n"
+76	"        # applies the casual mask (to prevent it from cheating from the future)\n"
+77	"        scores = scores.masked_fill(self.tril[:T, :T] ==0, float('-inf') ) # pyright: ignore[reportIndexIssue]\n"
+78	"        \n"
+79	"        # SOFTMAX TIME (sexy function ngl)\n"
+80	"        # quick recap of softmax is that it tones done extreme values, setting them between 0 and 1\n"
+81	"        weights = F.softmax(scores, dim=-1)\n"
+82	"        weights = self.dropout(weights)\n"
+83	"        \n"
+84	"        # this is a weighted combo of all the values\n"
+85	"        # essentially multiples the weight matrix and value matrix (Weight * Value)\n"
+86	"        out = weights @ v\n"
+87	"        \n"
+88	"        # [B, T, H]\n"
+89	"        return out\n"
+90	"        \n"
+91	"    "
+9	
+cell_type	"code"
+execution_count	10
+id	"1a26f27d"
+metadata	{}
+outputs	[]
+source	
+0	"# Multi Head Attention, which is an extension of the current Single Headed one\n"
+1	"\n"
+2	"\n"
+3	"class MultiHeadedAttention(nn.Module):\n"
+4	"    def __init__(self, num_heads, d_model):\n"
+5	"        super().__init__()\n"
+6	"        # this is extremely important as the num of heads must be a multiple of the model\n"
+7	"        # as otherwise the matrix multipliction fails\n"
+8	"        assert d_model % num_heads == 0\n"
+9	"\n"
+10	"        # instead of making a separate key, query, and value layer for every head,\n"
+11	"        # make all 3 * d_model values in one large GPU matrix multiplication\n"
+12	"        # mathematically this is still the exact same idea:\n"
+13	"        # X @ [Wq | Wk | Wv] = [X @ Wq | X @ Wk | X @ Wv]\n"
+14	"        # the only difference is that the GPU can do the work in one big operation\n"
+15	"        self.head_size = d_model // num_heads\n"
+16	"        self.num_heads = num_heads\n"
+17	"        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)\n"
+18	"\n"
+19	"        # after concatting the heads, the heads need to be projected back into the d_model,\n"
+20	"        # in order to preserve matrix operatioons\n"
+21	"        self.projection = nn.Linear(d_model, d_model)\n"
+22	"\n"
+23	"        # as prev explained, strategic disabling of param based on probability (dropout)\n"
+24	"        self.dropout = nn.Dropout(dropout)\n"
+25	"\n"
+26	"    def forward(self, x):\n"
+27	"\n"
+28	"        B, T, C = x.shape\n"
+29	"\n"
+30	"        # this single matrix multiplication creates q, k, and v for every head\n"
+31	"        # qkv starts as [B, T, 3 * d_model], then each part is [B, T, d_model]\n"
+32	"        q, k, v = self.qkv(x).chunk(3, dim=-1)\n"
+33	"\n"
+34	"        # split d_model into the individual heads: [B, T, C] -> [B, num_heads, T, head_size]\n"
+35	"        # transpose is important because each head now has its own full T by T attention matrix\n"
+36	"        q = q.view(B, T, self.num_heads, self.head_size).transpose(1, 2)\n"
+37	"        k = k.view(B, T, self.num_heads, self.head_size).transpose(1, 2)\n"
+38	"        v = v.view(B, T, self.num_heads, self.head_size).transpose(1, 2)\n"
+39	"\n"
+40	"        # mathematically, for each head this is still:\n"
+41	"        # softmax((Q @ K.transpose(-2, -1)) / sqrt(head_size) + causal_mask) @ V\n"
+42	"        # but on a supported GPU, scaled_dot_product_attention can use a fused CUDA kernel\n"
+43	"        # which scales, masks, softmaxes, drops out, and multiplies by V without repeatedly\n"
+44	"        # writing the huge [B, num_heads, T, T] score/weight matrices to GPU memory\n"
+45	"        # this also removes the Python loop and many tiny GPU kernel launches from above\n"
+46	"        out = F.scaled_dot_product_attention(\n"
+47	"            q,\n"
+48	"            k,\n"
+49	"            v,\n"
+50	"            dropout_p=dropout if self.training else 0.0,\n"
+51	"            is_causal=True,\n"
+52	"        )\n"
+53	"\n"
+54	"        # combine the heads back into the normal transformer shape [B, T, d_model]\n"
+55	"        out = out.transpose(1, 2).contiguous().view(B, T, C)\n"
+56	"\n"
+57	"        out = self.projection(out) \n"
+58	"        out = self.dropout(out)\n"
+59	"        return out"
+10	
+cell_type	"code"
+execution_count	11
+id	"ef65327c"
+metadata	{}
+outputs	[]
+source	
+0	"# This is the FeedForward layer, which allows for changes to each individual token's understanding and information\n"
+1	"# rather than simply being an average of all the sorrounding tokens (which attention will do)\n"
+2	"# this instead increases the info that each individual token holds\n"
+3	"class FeedForward(nn.Module):\n"
+4	"    def __init__(self, d_model):\n"
+5	"        super().__init__()\n"
+6	"\n"
+7	"        # this is just the neural network, very sexy and compact\n"
+8	"        # GeLU is being used rather than ReLU since GeLU is universally better\n"
+9	"        self.net = nn.Sequential(\n"
+10	"            nn.Linear(d_model, 4 * d_model, bias=False),\n"
+11	"            nn.GELU(\n"
+12	'                approximate="tanh"\n'
+13	"            ),  # since tanh is very close to the actual GeLU, it can be used, it's more performance efficient\n"
+14	"            nn.Dropout(dropout),\n"
+15	"            nn.Linear(4 * d_model, d_model, bias=False),\n"
+16	"            nn.Dropout(dropout),\n"
+17	"        )\n"
+18	"\n"
+19	"    # very simple forward passing, since each token is only modifying itself, rather than others\n"
+20	"    def forward(self, x):\n"
+21	"        return self.net(x)"
+11	
+cell_type	"code"
+execution_count	12
+id	"3aea17dc"
+metadata	{}
+outputs	[]
+source	
+0	"# Transformer block essentially functions as such:\n"
+1	"#  attention -> MLP(FeedForwardLayer) -> residual connections -> LayerNorm\n"
+2	"\n"
+3	"\n"
+4	"class Block(nn.Module):\n"
+5	"    def __init__(self, d_model, num_heads):\n"
+6	"        super().__init__()\n"
+7	"        self.self_attention = MultiHeadedAttention(num_heads=num_heads, d_model=d_model)\n"
+8	"\n"
+9	"        self.ffwd = FeedForward(d_model=d_model)\n"
+10	"        self.layer_norm_1 = nn.RMSNorm(\n"
+11	"            d_model\n"
+12	"        )  # RMSNorm used for performance, LayerNorm is fine\n"
+13	"\n"
+14	"        # by multiplying layer weights by a small amount, the rate at which\n"
+15	"        # the model learns is dampened, essentially allowing for smaller adjustment\n"
+16	"        # at late-stage\n"
+17	"        self.scale_1 = nn.Parameter(torch.ones(d_model) * 1e-2)\n"
+18	"        self.scale_2 = nn.Parameter(torch.ones(d_model) * 1e-2)\n"
+19	"\n"
+20	"    # this is also in parallel to allow for slightly faster compute\n"
+21	"    def forward(self, x):\n"
+22	"\n"
+23	"        normed_x = self.layer_norm_1(x)\n"
+24	"\n"
+25	"        x = x + self.scale_1 * self.self_attention(normed_x) + self.scale_2 * self.ffwd(normed_x)\n"
+26	"        return x"
+12	
+cell_type	"code"
+execution_count	null
+id	"1b99805f"
+metadata	{}
+outputs	
+0	
+name	"stdout"
+output_type	"stream"
+text	
+0	"Model parameters: 10,806,250\n"
+1	"step     0 | train loss 4.8395 | val loss 4.8726\n"
+source	
+[0…99]	
+[100…182]	
+13	
+cell_type	"code"
+execution_count	null
+id	"6e2fb0b9"
+metadata	{}
+outputs	
+0	
+name	"stdout"
+output_type	"stream"
+text	
+0	"\n"
+1	"\n"
+2	"============================================================\n"
+3	"GENERATED TEXT\n"
+4	"============================================================\n"
+5	"\n"
+6	"The model systems can be to intermed to problement than be be selective into sellicationshe to and the model.\n"
+7	"\n"
+8	"---\n"
+9	"\n"
+10	"# 124. Scalion\n"
+11	"\n"
+12	"LLMs are can because select is andome **performant information assistant information to the model to tokens.\n"
+13	"\n"
+14	"These are is conect inst ingual the normalic traing to internally the request the sarecture.\n"
+15	"\n"
+16	"The can same safert ing requestions into norrections.\n"
+17	"\n"
+18	"This is is called **pretrachipence**.\n"
+19	"\n"
+20	"---\n"
+21	"\n"
+22	"# 105. Compredic Most AI\n"
+23	"\n"
+24	"A cantain a sellech strachers as as the torect to pasksomect is an into intermode come ingentions.\n"
+25	"\n"
+26	"This is calleation ingent incormation context instructions compose antex comollent invernalues surrounding the sor conext infertaction inence.\n"
+27	"\n"
+28	"---\n"
+29	"\n"
+30	"# 110. Sampling\n"
+31	"\n"
+32	"A **assist-specompareturally ardwaropors the strans**.\n"
+33	"\n"
+34	"A the may become incluestries inceprearly tore parces ause and throun extramect to ineed to to prorrom thist this of the that token ing compontations.\n"
+35	"\n"
+36	"This can in is often impormatically come composent ingent in rell\n"
+source	
+0	"# since the model needs data to run, assigning first start token is most important\n"
+1	"context = torch.zeros((1, 1), dtype=torch.long, device=device)\n"
+2	"generated = model.generate(context, max_new_tokens=1000)\n"
+3	"hashes = generated[0].tolist()\n"
+4	"# for i in range(len(hashes)):\n"
+5	"#     hashes[i] += (random.random())\n"
+6	"#     hashes[i] = int(round(hashes[i]))\n"
+7	"    \n"
+8	"generated_text = decode(hashes)\n"
+9	'print("\\n")\n'
+10	'print("=" * 60)\n'
+11	'print("GENERATED TEXT")\n'
+12	'print("=" * 60)\n'
+13	"print(generated_text)"
+metadata	
+kernelspec	
+display_name	".venv (3.12.3.final.0)"
+language	"python"
+name	"python3"
+language_info	
+codemirror_mode	
+name	"ipython"
+version	3
+file_extension	".py"
+mimetype	"text/x-python"
+name	"python"
+nbconvert_exporter	"python"
+pygments_lexer	"ipython3"
+version	"3.12.3"
+nbformat	4
+nbformat_minor	5
+cells
+1
+cell_type
